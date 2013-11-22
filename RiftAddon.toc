@@ -1,0 +1,30 @@
+Identifier = "SKManager"
+Name = {
+    English = "SKManager"
+}
+NameShort = "SKManager"
+Description = "Allows for in-game management of SKManager loot lists."
+Author = "Ardoth"
+Website = "http://stevegood.org"
+Version = "1.0"
+Email = "steve+ardoth@stevegood.org"
+Environment = "2.5"
+
+RunOnStartup = {
+	"utils.lua",
+    "SKManager.lua"
+}
+
+Embed = {
+    LibSimpleWidgets = true
+}
+
+Dependencies = {
+    LibSimpleWidgets = {"required", "before"}
+}
+
+SavedVariables = {
+    _listData = "account",
+    _listWindowY = "account",
+    _listWindowX = "account"
+}
