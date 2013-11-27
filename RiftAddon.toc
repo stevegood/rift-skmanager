@@ -12,19 +12,22 @@ Environment = "2.5"
 
 RunOnStartup = {
 	"utils.lua",
+	"Raid.lua",
     "SKManager.lua"
 }
 
 Embed = {
-    LibSimpleWidgets = true
+    LibSimpleWidgets = true,
+    LibString = true
 }
 
 Dependencies = {
-    LibSimpleWidgets = {"required", "before"}
+    LibSimpleWidgets = {"required", "before"},
+    LibString = {"required", "before"}
 }
 
 SavedVariables = {
-    _listData = "account",
-    _listWindowY = "account",
-    _listWindowX = "account"
+    _listData = "character",
+    _listWindowY = "character",
+    _listWindowX = "character"
 }

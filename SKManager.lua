@@ -10,12 +10,16 @@ SKManager = {}
 local addon = ...
 local context = UI.CreateContext("SKManager")
 local listWindow = UI.CreateFrame("SimpleWindow", "SKManagerListWindow", context)
+local lists
+local listLabels
 local importButton = UI.CreateFrame("RiftButton", "SKManagerImportButton", listWindow)
 local exportButton = UI.CreateFrame("RiftButton", "SKManagerExportButton", listWindow)
+local edgeGap = 15
+local topGap = 70
 
 local function init()
-    local windowWidth = 1024
-    local windowHeight = 600
+    local windowWidth = 768
+    local windowHeight = 480
 
     local windowStartX
     if _listWindowX then
@@ -31,8 +35,6 @@ local function init()
         windowStartY = 100
     end
 
-    local edgeGap = 15
-    local topGap = 70
     local innerWidth = windowWidth - (edgeGap * 2)
     local innerHeight = windowHeight - ((edgeGap * 2) + topGap + exportButton:GetHeight())
 
@@ -46,18 +48,11 @@ local function init()
     listWindow:SetLayer(1)
     listWindow:SetAlpha(1)
     function listWindow.Event.Close()
-        local x = listWindow:GetLeft()
-        local y = listWindow:GetTop()
+        SKManager.saveListWindowPosition()
+    end
 
-        if x < 0 then
-            x = 0
-        end
-
-        if y < 0 then
-            y = 0
-        end
-
-        SKManager.saveData(x,y)
+    function listWindow.Event.Move()
+        SKManager.saveListWindowPosition()
     end
 
     -- buttons
@@ -79,6 +74,9 @@ local function init()
     local exportButtonLeft = leftButtonStart + importButton:GetWidth()
     exportButton:SetPoint("BOTTOMLEFT", listWindow, "BOTTOMLEFT", exportButtonLeft, buttonBottom)
     exportButton:SetWidth(100)
+    function exportButton.Event.LeftClick()
+        SKManager.openExportWindow()
+    end
 end
 
 local function AddonSavedVariablesLoadEnd(handle, identifier)
@@ -87,7 +85,26 @@ local function AddonSavedVariablesLoadEnd(handle, identifier)
         print("SKManager version "..addon.toc.Version.." loaded")
         print("Use /skm to open SKManager")
         init()
+        if _listData then
+            Raid = _listData
+            SKManager.renderRaid()
+        end
     end
+end
+
+function SKManager.saveListWindowPosition()
+    local x = listWindow:GetLeft()
+    local y = listWindow:GetTop()
+
+    if x < 0 then
+        x = 0
+    end
+
+    if y < 0 then
+        y = 0
+    end
+
+    SKManager.saveData(x,y)
 end
 
 function SKManager.saveData(x,y)
@@ -104,48 +121,161 @@ function SKManager.toggleListWindow()
 end
 
 function SKManager.openImportWindow()
-	local importWindow = UI.CreateFrame("SimpleWindow", "SKMImportWindow", context)
+    local x = listWindow:GetLeft()
+    local y = listWindow:GetTop()
+    local importWindow = UI.CreateFrame("SimpleWindow", "SKMImportWindow", context)
 	importWindow:SetCloseButtonVisible(true)
 	importWindow:SetLayer(3)
-	importWindow:SetWidth(640)
-	importWindow:SetHeight(480)
+	importWindow:SetWidth(320)
+	importWindow:SetHeight(240)
+    importWindow:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, y)
 	listWindow:SetVisible(false)
 	
 	local textArea = skmUtils.createTextArea("SKMImportTextArea", importWindow, (importWindow:GetHeight()-100), (importWindow:GetWidth()-30), 15, 70)
 	textArea.text:SetKeyFocus(true)
 	
-	-- local textFrame = UI.CreateFrame("Text", "SKMImportTextFrame", importWindow:GetContent())
--- 	textFrame:SetWidth(importWindow:GetWidth()-30)
--- 	textFrame:SetHeight(importWindow:GetHeight()-100)
--- 	textFrame:SetPoint("TOPLEFT", importWindow, "TOPLEFT", 15, 70)
--- 	textFrame:SetBackgroundColor(0,0,0,0.5)
--- 	
--- 	local scrollView = UI.CreateFrame("SimpleScrollView", "SKMImportScrollView", textFrame)
--- 	scrollView:SetWidth(textFrame:GetWidth())
--- 	scrollView:SetHeight(textFrame:GetHeight())
--- 	scrollView:SetPoint("TOPLEFT", textFrame, "TOPLEFT", 0, 0)
--- 	
--- 	local textArea = UI.CreateFrame("RiftTextfield", "SKMImportTextArea", scrollView)
--- 	textArea:SetText("")
--- 	textArea:SetKeyFocus(true)
--- 	scrollView:SetContent(textArea)
-	
 	function importWindow.Event.Close()
 		textArea.text:SetKeyFocus(false)
-		-- SKManager.doRun(textArea:GetText())
+        if textArea.text:GetText() ~= '' then
+            Raid = nil
+            _listData = nil
+            Raid = raidService.parseRaidString(textArea.text:GetText())
+            _listData = Raid
+            SKManager.renderRaid()
+        end
 		listWindow:SetVisible(true)
 	end
 end
 
-function SKManager.doRun(obj)
+function SKManager.openExportWindow()
+    local raidString = raidService.buildRaidString(Raid)
+    local x = listWindow:GetLeft()
+    local y = listWindow:GetTop()
+    local exportWindow = UI.CreateFrame("SimpleWindow", "SKMExportWindow", context)
+    exportWindow:SetCloseButtonVisible(true)
+    exportWindow:SetLayer(3)
+    exportWindow:SetWidth(320)
+    exportWindow:SetHeight(240)
+    exportWindow:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x, y)
+    listWindow:SetVisible(false)
 
-		function xpError(obj)
-			print(" ")
-			print("Error: "..obj)
-		end
-		
-		local retOK, ret1 = xpcall(loadstring(obj), xpError)
+    local textArea = skmUtils.createTextArea("SKMExportTextArea", exportWindow, (exportWindow:GetHeight()-100), (exportWindow:GetWidth()-30), 15, 70)
+    textArea.text:SetText(raidString)
 
+    function exportWindow.Event.Close()
+        textArea.text:SetKeyFocus(false)
+        listWindow:SetVisible(true)
+    end
+end
+
+function SKManager.renderRaid()
+    listWindow:SetTitle("SKManager - "..Raid.name)
+    local nextX = edgeGap*2
+    for k, v in pairs(Raid.callings) do
+        local label = SKManager.getListLabel(v.name, nextX)
+        local list = SKManager.getList(v.name, label, nextX)
+
+        local items = {}
+        for key, val in pairs(v.members) do
+            -- add members to list
+            table.insert(items, val.name)
+        end
+        list:SetItems(items)
+        function list.Event.SelectionChange()
+            local selectedItem = list:GetSelectedItem()
+
+            local alert = UI.CreateFrame("SimpleWindow", "SKMMoveToBottomConfirmationAlert", context)
+            alert:SetHeight(240)
+            alert:SetWidth(320)
+            alert:SetTitle("Are you Sure?")
+            alert:SetPoint("TOPLEFT", UIParent, "TOPLEFT", listWindow:GetLeft(), listWindow:GetTop())
+            alert:SetCloseButtonVisible(true)
+            function alert.Event.Close()
+                alert:SetVisible(false)
+                listWindow:SetVisible(true)
+            end
+
+            local text = UI.CreateFrame("Text", "SKMMoveToBottomConfirmationAlertText", alert)
+            text:SetWordwrap(true)
+            text:SetText("Are you sure you want to move "..selectedItem.." to the bottom of the "..v.name.." list?\nConfirm below or close this window to cancel.")
+            text:SetPoint("TOPLEFT", alert, "TOPLEFT", edgeGap*2, topGap)
+            text:SetWidth(alert:GetWidth()-(edgeGap*4))
+
+            local confirmationButton = UI.CreateFrame("RiftButton", "SKMMoveToBottomConfirmationAlertConfirmButton", alert)
+            confirmationButton:SetWidth(100)
+            confirmationButton:SetText("Yes")
+            confirmationButton:SetPoint("BOTTOMRIGHT", alert, "BOTTOMRIGHT", 0-(edgeGap), 0-(edgeGap))
+            function confirmationButton.Event.LeftClick()
+                local newMemberTable = {}
+                local memberNames = {}
+                local listPosition = 0
+                for i, member in pairs(v.members) do
+                    if member.name ~= selectedItem then
+                        member.listPosition = listPosition
+                        table.insert(newMemberTable, member)
+                        table.insert(memberNames, member.name)
+                        listPosition = listPosition + 1
+                    end
+                end
+
+                for i, member in pairs(v.members) do
+                    if member.name == selectedItem then
+                        member.listPosition = listPosition
+                        table.insert(newMemberTable, member)
+                        table.insert(memberNames, member.name)
+                    end
+                end
+
+                list:SetItems(memberNames)
+                v.members = newMemberTable
+                alert.Event.Close(alert)
+            end
+
+            alert:SetVisible(true)
+            listWindow:SetVisible(false)
+        end
+
+        -- increment the next x position
+        nextX = nextX+edgeGap+list:GetWidth()
+    end
+end
+
+function SKManager.getListLabel(listName, x)
+    if not listLabels then
+        listLabels = {}
+    end
+
+    for i,lbl in pairs(listLabels) do
+        if lbl:GetName() == listName.."ListLabel" then
+            return lbl
+        end
+    end
+
+    local label = UI.CreateFrame("Text", listName.."ListLabel", listWindow)
+    label:SetText(listName)
+    label:SetWidth((listWindow:GetWidth()-(edgeGap*7))/4)
+    label:SetPoint("TOPLEFT", listWindow, "TOPLEFT", x, topGap)
+    table.insert(listLabels, label)
+    return label
+end
+
+function SKManager.getList(listName, label, x)
+    if not lists then
+        lists = {}
+    end
+
+    for i,lst in pairs(lists) do
+        if lst:GetName() == listName.."LootList" then
+            return lst
+        end
+    end
+
+    local list = UI.CreateFrame("SimpleList", listName.."LootList", listWindow)
+    list:SetHeight(listWindow:GetHeight()-label:GetHeight()-((edgeGap*2)+topGap+exportButton:GetHeight()))
+    list:SetWidth(label:GetWidth())
+    list:SetPoint("TOPLEFT", listWindow, "TOPLEFT", x, label:GetHeight()+5+topGap)
+    table.insert(lists, list)
+    return list
 end
 
 -- Commands and bindings
